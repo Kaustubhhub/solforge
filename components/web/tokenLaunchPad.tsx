@@ -6,8 +6,12 @@ import { toast } from "sonner"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import { useState } from "react"
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { createMetadataAccountV3, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters";
+import { publicKey, percentAmount } from "@metaplex-foundation/umi";
+import { createInitializeMintInstruction, MINT_SIZE, TOKEN_PROGRAM_ID, getMinimumBalanceForRentExemptMint } from "@solana/spl-token"
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js"
-import { createInitializeMint2Instruction, getMinimumBalanceForRentExemptMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token"
 
 const TokenLaunchPad = () => {
     const wallet = useWallet()
@@ -16,35 +20,79 @@ const TokenLaunchPad = () => {
     const [symbol, setSymbol] = useState("")
     const [Supply, setSupply] = useState("")
     const [image, setImage] = useState<File | null>()
-    
+
+
     const handleCreateToken = async () => {
-        if (!wallet.publicKey) {
-            toast.error("Please connect a wallet.")
-            return
+        try {
+            if (!wallet.publicKey) {
+                throw new Error("Wallet not connected");
+            }
+
+            const mintKeypair = Keypair.generate();
+
+            console.log(mintKeypair.publicKey.toBase58())
+
+            const lamports =
+                await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+
+            const transaction = new Transaction().add(
+                SystemProgram.createAccount({
+                    fromPubkey: wallet.publicKey,
+                    newAccountPubkey: mintKeypair.publicKey,
+                    space: MINT_SIZE,
+                    lamports,
+                    programId: TOKEN_PROGRAM_ID,
+                }),
+                createInitializeMintInstruction(
+                    mintKeypair.publicKey,
+                    9,
+                    wallet.publicKey,
+                    null
+                )
+            );
+
+            transaction.feePayer = wallet.publicKey;
+            transaction.recentBlockhash = (
+                await connection.getLatestBlockhash()
+            ).blockhash;
+
+            transaction.partialSign(mintKeypair);
+
+            const sig = await wallet.sendTransaction(transaction, connection);
+            await connection.confirmTransaction(sig, "confirmed");
+
+            console.log("✅ Mint created:", mintKeypair.publicKey.toBase58());
+
+            const umi = createUmi(connection.rpcEndpoint).use(
+                walletAdapterIdentity(wallet)
+            );
+
+            const metadataTx = await createMetadataAccountV3(umi, {
+                mint: publicKey(mintKeypair.publicKey.toBase58()),
+                mintAuthority: umi.identity,
+                payer: umi.identity,
+                updateAuthority: umi.identity,
+
+                data: {
+                    name: "Best Token Ever",
+                    symbol: "BTE",
+                    uri: "ipfs://QmcAb723KChFCzqiwVo3khj2tUFg9mzPHSFXkTsJ7a83uk",
+                    sellerFeeBasisPoints: 500, // 5%
+                    creators: null,
+                    collection: null,
+                    uses: null,
+                },
+
+                isMutable: true,
+                collectionDetails: null,
+            }).sendAndConfirm(umi);
+
+            console.log("Metadata TX:", metadataTx.signature);
+        } catch (err) {
+            console.error(err);
         }
+    };
 
-        const mintKeypair = Keypair.generate();
-        console.log(mintKeypair.publicKey.toBase58())
-        const lamports = await getMinimumBalanceForRentExemptMint(connection);
-
-        const transaction = new Transaction().add(
-            SystemProgram.createAccount({
-                fromPubkey: wallet.publicKey,
-                newAccountPubkey: mintKeypair.publicKey,
-                space: MINT_SIZE,
-                lamports,
-                programId: TOKEN_PROGRAM_ID
-            }),
-            createInitializeMint2Instruction(mintKeypair.publicKey, 9, wallet.publicKey, wallet.publicKey, TOKEN_PROGRAM_ID)
-        )
-
-        transaction.feePayer = wallet.publicKey
-        transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        transaction.partialSign(mintKeypair)
-
-        await wallet.sendTransaction(transaction, connection);
-        console.log(`Token mint created at ${mintKeypair.publicKey.toBase58()}`)
-    }
     return (
         <main className="text-center my-3 mx-60">
             <h1 className="font-bold text-2xl">Token Launch Pad</h1>
