@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/web/theme-provider";
 import { SolanaProvider } from "./providers/solanaProvider";
 import Navbar from "@/components/web/navbar";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,7 @@ export default function RootLayout({
           <SolanaProvider>
             <Navbar />
             {children}
+            <Toaster />
           </SolanaProvider>
         </ThemeProvider>
       </body>

@@ -1,8 +1,7 @@
 "use client"
 import Image from "next/image"
 import { ModeToggle } from "./modeToggle"
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
-import { buttonVariants } from "../ui/button"
+import WalletButton from "./walletButton"
 
 const Navbar = () => {
     return (
@@ -12,8 +11,8 @@ const Navbar = () => {
                 <p className="font-bold text-xl">Solforge</p>
             </div>
             <div className="flex justify-around items-center gap-2">
+                <WalletButton />
                 <ModeToggle />
-                <WalletMultiButton/>
             </div>
 
         </div>
